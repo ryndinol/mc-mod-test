@@ -1,36 +1,40 @@
 {
   "schemaVersion": 1,
-  "id": "modid",
+  "id": "mymod",
   "version": "${version}",
 
-  "name": "Example Mod",
+  "name": "My Mod",
   "description": "This is an example description! Tell everyone what your mod is about!",
   "authors": [
     "Me!"
   ],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "homepage": "https://github.com/ryndinol/mc-mod-test/tree/21w40a",
+    "sources": "https://github.com/ryndinol/mc-mod-test/tree/21w40a"
   },
 
   "license": "CC0-1.0",
-  "icon": "assets/modid/icon.png",
+  "icon": "assets/mymod/icon.png",
 
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.example.ExampleMod"
+      {
+        "adapter": "kotlin",
+        "value": "ryndinol.mymod.MyMod"
+      }
     ]
   },
   "mixins": [
-    "modid.mixins.json"
+    "mymod.mixins.json"
   ],
 
   "depends": {
-    "fabricloader": ">=0.11.3",
+    "fabricloader": ">=0.12.1",
     "fabric": "*",
-    "minecraft": "1.17.x",
-    "java": ">=16"
+    "minecraft": "1.18.x",
+    "java": ">=16",
+    "fabric-language-kotlin": ">=1.6.5+kotlin.1.5.31"
   },
   "suggests": {
     "another-mod": "*"
