@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "mymod",
-  "version": "${version}",
+  "id": "$modid",
+  "version": "$version",
 
   "name": "My Mod",
   "description": "This is an example description! Tell everyone what your mod is about!",
