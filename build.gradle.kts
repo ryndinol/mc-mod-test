@@ -56,8 +56,8 @@ dependencies {
     modImplementation(group = "net.fabricmc.fabric-api", name="fabric-api", version = fabric_version)
     modImplementation(group = "net.fabricmc", name="fabric-language-kotlin", version = fabric_kotlin_version)
 
-    modImplementation(group = "net.adriantodt.fabricmc", name="fallflyinglib", version = ffl_version)
-    include(group = "net.adriantodt.fabricmc", name="fallflyinglib", version = ffl_version)
+    //modImplementation(group = "net.adriantodt.fabricmc", name="fallflyinglib", version = ffl_version)
+    //include(group = "net.adriantodt.fabricmc", name="fallflyinglib", version = ffl_version)
 }
 
 tasks.getByName<ProcessResources>("processResources") {
