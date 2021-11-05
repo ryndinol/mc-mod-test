@@ -24,6 +24,8 @@ public abstract class ElytraTravelMixin extends Entity {
 	}
 	private boolean useVanillaMechanics  = false;
 
+	private Vec3d dvs[] = null;
+
 	//@Inject(method="travel", at=@At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V", ordinal = 6), locals = LocalCapture.PRINT)
 	@Inject(method="travel", at=@At(value="INVOKE", target="Ljava/lang/Math;min(DD)D"), locals = LocalCapture.CAPTURE_FAILHARD)
 	protected void customVelocityCalculation(Vec3d input, CallbackInfo ci, double gravity, boolean $$4, FluidState $$5, Vec3d v0, Vec3d rotation, float pitch, double speed_horiz, double rotation_horiz, double rotation_length, float cos_pitch) {
@@ -34,6 +36,9 @@ public abstract class ElytraTravelMixin extends Entity {
 		//LivingEntity me = (LivingEntity)(Object)this;
 
 		if (true) {
+			if (dvs == null) {
+				dvs = new Vec3d[]{Vec3d.ZERO, Vec3d.ZERO, Vec3d.ZERO, Vec3d.ZERO};
+			}
 			// Airplane :D
 			double cl0 = 0.1;
 			double cl_alpha = 6;
@@ -48,32 +53,31 @@ public abstract class ElytraTravelMixin extends Entity {
 			double ar = 10;
 			double wing_area = 20;
 
-			// Effect of gravity.
-			// Gravity is 0.08 blocks/tick^2.
-			Vec3d v = v0.add(0.0, -gravity, 0.0);
 			float yaw = (float)(this.getYaw()*Math.PI/180.0);
 			MyElytra.logger.warn("----------------------");
 			// NOTE: Roll isn't actually roll, it's used as a counter for number of ticks while fallflying.
 			MyElytra.logger.warn("rotation: "+rotation+"; pitch: "+pitch+"; yaw: "+yaw);
-			MyElytra.logger.warn("velocity: "+v);
+			MyElytra.logger.warn("velocity: "+v0);
 
 			//double airspeed = v.length();
 
 			// Transform velocity from world to local frame.
-			// Local frame: only pitch and yaw, no roll.
-			//v = v.rotateY(-(float)rotation.y);
-			v = v.rotateY(yaw);
-			v = v.rotateX(pitch);
-
 			// NOTE: Not the standard aircraft cartesian frame of reference.
 			// Z is forward, Y is upward, X is left. Pitch is about X-axis, and is opposite sign of what is expected.
-			MyElytra.logger.warn("velocity rotated: "+v);
+			// Local frame: only pitch and yaw, no roll.
+			//v = v.rotateY(-(float)rotation.y);
+			Vec3d v = v0.rotateY(yaw);
+			// Rotate in pitch such that frame lines up with airflow direction, since lift acts perpendicular to airflow, not perpendicular to wing.
+			float airflow_pitch = -(float)MathHelper.atan2(v.y, v.z);
+			MyElytra.logger.warn("velocity rotated: "+v+"; airflow pitch: "+airflow_pitch+" vs. pitch: "+pitch+"; vs rotation pitch: "+MathHelper.atan2(rotation.y, -rotation.horizontalLength()));
 
-			// Fake yaw equation.
-			double yaw_force = -0.1 * v.x;
+			v = v.rotateX(airflow_pitch);
 
+			Vec3d v_out;
 			if (v.z >= 0) {
-				double alpha = -MathHelper.atan2(v.y, v.z);
+
+				//double alpha = -MathHelper.atan2(v.y, v.z);
+				double alpha = airflow_pitch - pitch;
 				MyElytra.logger.warn("alpha: "+alpha);
 
 				// TODO: better stall?
@@ -95,19 +99,48 @@ public abstract class ElytraTravelMixin extends Entity {
 				// Lift and drag act in the 'rotation' frame. Need to rotate into the world coordinate frame.
 				
 				//v = v.add(-drag, lift, yaw_force);
+
+				// Fake yaw equation.
+				double yaw_force = -0.1 * v.x;
+
 				v = v.add(yaw_force, lift, -drag);
+
+				v_out = v;
 
 				// Convert back to world coordinates.
 			} else {
 				//v = v.add(yaw_force, 0, -0.1*v.z);
 				//me.isFallFlying()
 				this.setFlag(FALL_FLYING_FLAG_INDEX, false);
+				v_out = v0;
 			}
-			v = v.rotateX(-pitch);
-			v = v.rotateY(-yaw);
+			v_out = v_out.rotateX(-airflow_pitch);
+			v_out = v_out.rotateY(-yaw);
+
+			// Effect of gravity.
+			// Gravity is 0.08 blocks/tick^2.
+			v_out = v_out.add(0.0, -gravity, 0.0);
 
 			// Vanilla terminal velocity calc.
-			this.setVelocity(v.multiply(0.99f, 0.98f, 0.99f));
+			v_out = v_out.multiply(0.99f, 0.98f, 0.99f);
+
+			Vec3d dv = v_out.subtract(v0);
+
+			// Adams–Bashforth 
+			Vec3d v_next = v0.add(
+				dv.multiply(1901.0/720)
+				.subtract(dvs[3].multiply(2774.0/720))
+				.add(dvs[2].multiply(2616.0/720))
+				.subtract(dvs[1].multiply(1274.0/720))
+				.add(dvs[0].multiply(251.0/720))
+			);
+
+			dvs[0] = dvs[1];
+			dvs[1] = dvs[2];
+			dvs[2] = dvs[3];
+			dvs[3] = dv;
+
+			this.setVelocity(v_next);
 			//this.setVelocity(v);
 
 			return;

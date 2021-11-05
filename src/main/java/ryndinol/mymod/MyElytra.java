@@ -7,4 +7,3 @@ public class MyElytra {
     public static Logger logger = LogManager.getLogger("MyElytra");
     
 }
-    
