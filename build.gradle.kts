@@ -13,6 +13,12 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 }
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    kotlinOptions {
+        jvmTarget = "16"
+    }
+}
+
 
 val mod_version: String by project
 val mod_id: String by project
@@ -28,7 +34,7 @@ version = mod_version
 project.group = maven_group
 
 base {
-	archivesBaseName = archives_base_name
+    archivesName.set(archives_base_name)
 }
 
 repositories {
