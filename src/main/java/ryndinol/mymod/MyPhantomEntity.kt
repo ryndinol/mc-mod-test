@@ -10,6 +10,8 @@ import net.minecraft.entity.ai.goal.ActiveTargetGoal
 import net.minecraft.entity.ai.goal.LookAtEntityGoal
 import net.minecraft.entity.mob.PhantomEntity
 import net.minecraft.entity.player.PlayerEntity
+import net.minecraft.util.ActionResult
+import net.minecraft.util.Hand
 import net.minecraft.world.World
 
 class MyPhantomEntity(entityType: EntityType<out PhantomEntity?>?, world: World?) : PhantomEntity(entityType, world) {
@@ -20,6 +22,48 @@ class MyPhantomEntity(entityType: EntityType<out PhantomEntity?>?, world: World?
         goalSelector.add(6, LookAtEntityGoal(this, PlayerEntity::class.java, 8.0f))
         targetSelector.add(1, ActiveTargetGoal(this, PlayerEntity::class.java, true))
         //targetSelector.add(1, FindTargetGoal())
+    }
+
+    override fun dismountVehicle() {
+        super.dismountVehicle()
+    }
+
+    override fun tickRiding() {
+        super.tickRiding()
+    }
+
+    override fun interactMob(player: PlayerEntity?, hand: Hand?): ActionResult {
+        if (player != null && hand != null && player.getStackInHand(hand).isEmpty) {
+            //if (!hasPassengers()) {
+            if (world.isClient) {
+            //if (!world.isClient) {
+
+                // Ride phantom
+//                player.yaw = yaw
+//                player.pitch = pitch
+//                if (player.startRiding(this)) {
+//                    return ActionResult.CONSUME
+//                } else {
+//                    return ActionResult.SUCCESS
+//                }
+                // Phantom rides you!
+                yaw = player.yaw
+                pitch = player.pitch
+                this.startRiding(player, true)
+            }
+            return ActionResult.success(!world.isClient)
+            /*
+            val nbtCompound = NbtCompound()
+            nbtCompound.putString("id", this.savedEntityId)
+            writeNbt(nbtCompound)
+            if (player.addShoulderEntity(nbtCompound)) {
+                discard()
+                return ActionResult.CONSUME;
+            } else {
+                return ActionResult.FAIL;
+            }*/
+        }
+        return super.interactMob(player, hand)
     }
 
 }
