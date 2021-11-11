@@ -23,8 +23,82 @@ public abstract class ElytraTravelMixin extends Entity {
 		//TODO Auto-generated constructor stub
 	}
 	private boolean useVanillaMechanics  = false;
+	private boolean wasFallFlying = false;
 
-	private Vec3d dvs[] = null;
+	@Inject(method="travel", at=@At(value="TAIL"))
+	protected void resetFallFlying(CallbackInfo ci) {
+		wasFallFlying = getFlag(FALL_FLYING_FLAG_INDEX);
+	}
+
+	private Vec3d eval(Vec3d v0, double gravity, float pitch, boolean debug) {
+			// Airplane :D
+			double cl0 = 0.1;
+			//double cl_alpha = 6;
+			double cd0 = 0.03;
+			//double cd0 = 0.01;
+
+			// Small hang glider aspect ratio and wing area.
+			//double ar = 5.5;
+			//double wing_area = 10;
+
+			// Big glider
+			double ar = 10;
+			double wing_area = 20;
+
+			float yaw = (float)(this.getYaw()*Math.PI/180.0);
+			// NOTE: Roll isn't actually roll, it's used as a counter for number of ticks while fallflying.
+
+		// Transform velocity from world to local frame.
+		// NOTE: Not the standard aircraft cartesian frame of reference.
+		// Z is forward, Y is upward, X is left. Pitch is about X-axis, and is opposite sign of what is expected.
+		// Local frame: only pitch and yaw, no roll.
+		//v = v.rotateY(-(float)rotation.y);
+		Vec3d v = v0.rotateY(yaw);
+		// Rotate in pitch such that frame lines up with airflow direction, since lift acts perpendicular to airflow, not perpendicular to wing.
+		float airflow_pitch = -(float)MathHelper.atan2(v.y, v.z);
+		//double alpha = -MathHelper.atan2(v.y, v.z);
+		double alpha = airflow_pitch - pitch;
+		v = v.rotateX(airflow_pitch);
+
+		// TODO: better stall?
+		//double cl = MathHelper.clamp(cl0 + cl_alpha*alpha, -1.0, 1.0);
+		double cl_max = 1.5;
+		double alpha_max = 0.3;
+		double cl = cl0 + cl_max*MathHelper.sin((float)(MathHelper.clamp(2*alpha/alpha_max, -2.0, 2.0)*Math.PI/2.0));
+		double cd = cd0 + cl*cl/(Math.PI*ar);
+
+
+		// Units of kg*block/tick^2
+		double half_rho_v_squared_s = .5*1.225*v.z*v.z*wing_area;
+		double mass = 100.0;
+
+		double lift = half_rho_v_squared_s*cl;
+		double drag = half_rho_v_squared_s*cd;
+		lift /= mass;
+		drag /= mass;
+		if (debug) MyElytra.logger.warn("L/D: "+cl/cd+"; alpha: "+alpha+"; cl: "+cl+"; lift: "+lift+"; drag: "+drag);
+
+		// Lift and drag act in the 'rotation' frame. Need to rotate into the world coordinate frame.
+		
+		//v = v.add(-drag, lift, yaw_force);
+
+		// Fake yaw equation.
+		double yaw_force = -0.1 * v.x;
+
+		Vec3d dv = v.z >= 0 ? new Vec3d(yaw_force, lift, -drag) : new Vec3d(yaw_force, 0, drag);
+
+		// Convert back to world coordinates.
+		dv = dv.rotateX(-airflow_pitch);
+		dv = dv.rotateY(-yaw);
+
+		// Effect of gravity.
+		// Gravity is 0.08 blocks/tick^2.
+		dv = dv.add(0.0, -gravity, 0.0);
+
+		// Vanilla terminal velocity calc.
+		//v_out = v_out.multiply(0.99f, 0.98f, 0.99f);
+		return dv;
+	}
 
 	//@Inject(method="travel", at=@At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V", ordinal = 6), locals = LocalCapture.PRINT)
 	@Inject(method="travel", at=@At(value="INVOKE", target="Ljava/lang/Math;min(DD)D"), locals = LocalCapture.CAPTURE_FAILHARD)
@@ -36,111 +110,39 @@ public abstract class ElytraTravelMixin extends Entity {
 		//LivingEntity me = (LivingEntity)(Object)this;
 
 		if (true) {
-			if (dvs == null) {
-				dvs = new Vec3d[]{Vec3d.ZERO, Vec3d.ZERO, Vec3d.ZERO, Vec3d.ZERO};
+			if (!wasFallFlying) {
+				// initialize any state here?
+				// TODO: Remove wasFallFlying if unused.
 			}
-			// Airplane :D
-			double cl0 = 0.1;
-			double cl_alpha = 6;
-			//double cd0 = 0.03;
-			double cd0 = 0.01;
-
-			// Small hang glider aspect ratio and wing area.
-			//double ar = 5.5;
-			//double wing_area = 10;
-
-			// Big glider
-			double ar = 10;
-			double wing_area = 20;
-
-			float yaw = (float)(this.getYaw()*Math.PI/180.0);
-			MyElytra.logger.warn("----------------------");
-			// NOTE: Roll isn't actually roll, it's used as a counter for number of ticks while fallflying.
-			MyElytra.logger.warn("rotation: "+rotation+"; pitch: "+pitch+"; yaw: "+yaw);
-			MyElytra.logger.warn("velocity: "+v0);
 
 			//double airspeed = v.length();
 
-			// Transform velocity from world to local frame.
-			// NOTE: Not the standard aircraft cartesian frame of reference.
-			// Z is forward, Y is upward, X is left. Pitch is about X-axis, and is opposite sign of what is expected.
-			// Local frame: only pitch and yaw, no roll.
-			//v = v.rotateY(-(float)rotation.y);
-			Vec3d v = v0.rotateY(yaw);
-			// Rotate in pitch such that frame lines up with airflow direction, since lift acts perpendicular to airflow, not perpendicular to wing.
-			float airflow_pitch = -(float)MathHelper.atan2(v.y, v.z);
-			MyElytra.logger.warn("velocity rotated: "+v+"; airflow pitch: "+airflow_pitch+" vs. pitch: "+pitch+"; vs rotation pitch: "+MathHelper.atan2(rotation.y, -rotation.horizontalLength()));
+			// classic rk4
+			// Vec3d k1 = eval(v0);
+			// Vec3d k2 = eval(v0.add(k1.multiply(0.5)));
+			// Vec3d k3 = eval(v0.add(k2.multiply(0.5)));
+			// Vec3d k4 = eval(v0.add(k3));
+			// Vec3d v_next = v0.add(k1.add(k2.multiply(2)).add(k3.multiply(2)).add(k4).multiply(1.0/6));
 
-			v = v.rotateX(airflow_pitch);
-
-			Vec3d v_out;
-			if (v.z >= 0) {
-
-				//double alpha = -MathHelper.atan2(v.y, v.z);
-				double alpha = airflow_pitch - pitch;
-				MyElytra.logger.warn("alpha: "+alpha);
-
-				// TODO: better stall?
-				//double cl = MathHelper.clamp(cl0 + cl_alpha*alpha, -1.0, 1.0);
-				double cl = cl0 + MathHelper.sin((float)(MathHelper.clamp(cl_alpha*alpha, -1.5, 1.5)*Math.PI/2.0));
-				double cd = cd0 + cl*cl/(Math.PI*ar);
+			// 3/8 rule
+			Vec3d k1 = eval(v0, gravity, pitch, false);
+			Vec3d k2 = eval(v0.add(k1.multiply(1.0/3)), gravity, pitch, true);
+			Vec3d k3 = eval(v0.add(k1.multiply(-1.0/3)).add(k2.multiply(1.0)), gravity, pitch, false);
+			Vec3d k4 = eval(v0.add(k1).subtract(k2).add(k3), gravity, pitch, false);
+			Vec3d v_next = v0.add(k1.add(k2.multiply(3)).add(k3.multiply(3)).add(k4).multiply(1.0/8));
 
 
-				// Units of kg*block/tick^2
-				double half_rho_v_squared_s = .5*1.225*v.z*v.z*wing_area;
-				double mass = 100.0;
-
-				double lift = half_rho_v_squared_s*cl;
-				double drag = half_rho_v_squared_s*cd;
-				lift /= mass;
-				drag /= mass;
-				MyElytra.logger.warn("alpha: "+alpha+"; cl: "+cl+"; lift: "+lift+"; drag: "+drag);
-
-				// Lift and drag act in the 'rotation' frame. Need to rotate into the world coordinate frame.
-				
-				//v = v.add(-drag, lift, yaw_force);
-
-				// Fake yaw equation.
-				double yaw_force = -0.1 * v.x;
-
-				v = v.add(yaw_force, lift, -drag);
-
-				v_out = v;
-
-				// Convert back to world coordinates.
-			} else {
 				//v = v.add(yaw_force, 0, -0.1*v.z);
 				//me.isFallFlying()
-				this.setFlag(FALL_FLYING_FLAG_INDEX, false);
-				v_out = v0;
-			}
-			v_out = v_out.rotateX(-airflow_pitch);
-			v_out = v_out.rotateY(-yaw);
 
-			// Effect of gravity.
-			// Gravity is 0.08 blocks/tick^2.
-			v_out = v_out.add(0.0, -gravity, 0.0);
+				// TODO:
+				//this.setFlag(FALL_FLYING_FLAG_INDEX, false);
+				//v_out = v0;
 
-			// Vanilla terminal velocity calc.
-			v_out = v_out.multiply(0.99f, 0.98f, 0.99f);
-
-			Vec3d dv = v_out.subtract(v0);
-
-			// Adams–Bashforth 
-			Vec3d v_next = v0.add(
-				dv.multiply(1901.0/720)
-				.subtract(dvs[3].multiply(2774.0/720))
-				.add(dvs[2].multiply(2616.0/720))
-				.subtract(dvs[1].multiply(1274.0/720))
-				.add(dvs[0].multiply(251.0/720))
-			);
-
-			dvs[0] = dvs[1];
-			dvs[1] = dvs[2];
-			dvs[2] = dvs[3];
-			dvs[3] = dv;
+			MyElytra.logger.warn("v_next: "+v_next);
 
 			this.setVelocity(v_next);
+			//this.setVelocity(v_out);
 			//this.setVelocity(v);
 
 			return;
@@ -195,10 +197,4 @@ public abstract class ElytraTravelMixin extends Entity {
 			//setVelocity(v);
 		}
 	}
-
-	/*
-	@Redirect(method="travel", at=@At(value="INVOKE", target="Lnet/minecraft/util/math/Vec3d;multiply(DDD)Lnet/minecraft/util/math/Vec3d;", ordinal = 2))
-	protected Vec3d attenuateVelocity(Vec3d v, double fx, double fy, double fz) {
-		return v.multiply(0.97, fy, 0.97);
-	}*/
 }

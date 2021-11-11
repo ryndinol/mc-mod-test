@@ -35,6 +35,10 @@ object MyMod: ModInitializer {
 
     private const val MODID = "mymod"
 
+    public fun id(path: String): Identifier {
+        return Identifier(MODID, path)
+    }
+
 
     override fun onInitialize() {
         // This code runs as soon as Minecraft is in a mod-load-ready state.

@@ -8,13 +8,21 @@ import net.minecraft.client.render.entity.model.PhantomEntityModel
 import net.minecraft.entity.EntityType
 import net.minecraft.entity.ai.goal.ActiveTargetGoal
 import net.minecraft.entity.ai.goal.LookAtEntityGoal
+import net.minecraft.entity.ai.control.MoveControl
 import net.minecraft.entity.mob.PhantomEntity
 import net.minecraft.entity.player.PlayerEntity
 import net.minecraft.util.ActionResult
 import net.minecraft.util.Hand
+import net.minecraft.util.math.Vec3d
 import net.minecraft.world.World
+import io.github.ladysnake.pal.AbilitySource
+import io.github.ladysnake.pal.Pal
+import net.adriantodt.fallflyinglib.FallFlyingLib
 
 class MyPhantomEntity(entityType: EntityType<out PhantomEntity?>?, world: World?) : PhantomEntity(entityType, world) {
+    companion object {
+        val TAME_PHANTOM: AbilitySource = Pal.getAbilitySource(MyMod.id("tame_phantom"))
+    }
     override fun initGoals() {
         //goalSelector.add(1, StartAttackGoal())
         //goalSelector.add(2, SwoopMovementGoal())
@@ -24,12 +32,40 @@ class MyPhantomEntity(entityType: EntityType<out PhantomEntity?>?, world: World?
         //targetSelector.add(1, FindTargetGoal())
     }
 
+
+    override fun getMoveControl(): MoveControl {
+        (getVehicle() as? PlayerEntity)?.let {
+
+        }
+        return super.getMoveControl()
+    }
+
+    val isRidingPlayer: Boolean get() = this.getVehicle() is PlayerEntity
+
     override fun dismountVehicle() {
+
+        if (!world.isClient) {
+            setAiDisabled(false)
+            (firstPassenger as? PlayerEntity)?.let {
+                Pal.revokeAbility(it, FallFlyingLib.ABILITY, TAME_PHANTOM)
+            }
+        }
         super.dismountVehicle()
     }
 
     override fun tickRiding() {
         super.tickRiding()
+    }
+
+    override fun tickMovement() {
+        if (isRidingPlayer) {
+            if (isAffectedByDaylight) {
+                dismountVehicle()
+                return
+            }
+        } else {
+            super.tickMovement()
+        }
     }
 
     override fun interactMob(player: PlayerEntity?, hand: Hand?): ActionResult {
@@ -49,21 +85,28 @@ class MyPhantomEntity(entityType: EntityType<out PhantomEntity?>?, world: World?
                 // Phantom rides you!
                 yaw = player.yaw
                 pitch = player.pitch
-                this.startRiding(player, true)
             }
-            return ActionResult.success(!world.isClient)
-            /*
-            val nbtCompound = NbtCompound()
-            nbtCompound.putString("id", this.savedEntityId)
-            writeNbt(nbtCompound)
-            if (player.addShoulderEntity(nbtCompound)) {
-                discard()
-                return ActionResult.CONSUME;
-            } else {
-                return ActionResult.FAIL;
-            }*/
+
+            if (this.startRiding(player, true)) {
+                if (!world.isClient) {
+                    setAiDisabled(true)
+                    Pal.grantAbility(player, FallFlyingLib.ABILITY, TAME_PHANTOM)
+                }
+                return ActionResult.SUCCESS
+            }
+            //return ActionResult.success(!world.isClient)
+            return ActionResult.CONSUME
         }
         return super.interactMob(player, hand)
+    }
+
+    fun stickToPlayer(player: PlayerEntity) {
+        this.yaw = player.yaw
+        if (player.isFallFlying) {
+            this.pitch = -player.pitch
+        } else {
+            this.pitch = 90.0f //-(Math.PI/4.0).toFloat();
+        }
     }
 
 }
